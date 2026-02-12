@@ -36,26 +36,43 @@ Plataforma de nueva generación para **captura, análisis, verificación, modera
    - Justificación textual de score y acción.
    - Política configurable.
 
-## Arquitectura propuesta
+## Plan operativo post-MVP (paso urgente ejecutado)
+
+Tras el MVP inicial, el siguiente paso más relevante y urgente era **operacionalizar el ciclo completo de gestión**:
+
+- Intake de reportes → evaluación automática.
+- Enrutamiento por severidad y score de prioridad.
+- Cola de casos para atención por impacto.
+- Retroalimentación de casos cerrados para aprendizaje continuo de fuentes.
+
+Este paso ya se implementó mediante un orquestador de operaciones (`ChismeOpsOrchestrator`).
+
+## Arquitectura (actualizada)
 
 - **Capa de Captura:** APIs, conectores y formularios.
 - **Capa de Inteligencia:** scoring de credibilidad, análisis semántico, priorización.
-- **Capa de Decisión:** reglas + políticas + flujos de revisión humana.
-- **Capa de Aprendizaje:** retroalimentación y recalibración de perfiles.
+- **Capa de Operaciones:** gestión de casos, estados (`triage`, `under_review`, `escalated`, `closed`) y cola priorizada.
+- **Capa de Aprendizaje:** retroalimentación de casos que recalibra confiabilidad de fuentes.
 - **Capa de Gobierno:** auditoría, privacidad, retención y cumplimiento.
 
 ## Implementación incluida en este repositorio
 
-Este repositorio incluye un **MVP funcional** en Python con:
+Este repositorio incluye un **MVP+ operativo** en Python con:
 
-- Modelo de `GossipReport` y `SourceProfile`.
+- Modelo de `GossipReport`, `SourceProfile`, `GossipCase` y `FeedbackRecord`.
 - `ChismeIntelligenceEngine` para:
   - score de credibilidad,
   - score de riesgo,
   - clasificación de severidad,
   - recomendación de acciones.
+- `ChismeOpsOrchestrator` para:
+  - intake y creación de casos,
+  - cálculo de prioridad,
+  - enrutamiento inicial por severidad,
+  - transición de estados,
+  - ciclo de aprendizaje por feedback.
 - Configuración de políticas mediante YAML.
-- Pruebas automáticas.
+- Pruebas automáticas de evaluación y operación.
 
 ## Ejecución rápida
 

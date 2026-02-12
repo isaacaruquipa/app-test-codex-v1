@@ -12,6 +12,13 @@ class Severity(str, Enum):
     CRITICAL = "critical"
 
 
+class CaseStatus(str, Enum):
+    TRIAGE = "triage"
+    UNDER_REVIEW = "under_review"
+    ESCALATED = "escalated"
+    CLOSED = "closed"
+
+
 @dataclass
 class SourceProfile:
     source_id: str
@@ -65,6 +72,24 @@ class EvaluationResult:
     severity: Severity
     recommendation: str
     rationale: str
+
+
+@dataclass
+class GossipCase:
+    case_id: str
+    report: GossipReport
+    evaluation: EvaluationResult
+    status: CaseStatus
+    priority: float
+    timeline: List[str] = field(default_factory=list)
+
+
+@dataclass
+class FeedbackRecord:
+    case_id: str
+    confirmed_true: bool
+    confidence: float = 1.0
+    notes: str = ""
 
 
 class ChismeIntelligenceEngine:
@@ -153,6 +178,68 @@ class ChismeIntelligenceEngine:
         )
 
 
+class ChismeOpsOrchestrator:
+    """Orquesta el flujo operativo post-evaluación: prioriza, enruta y aprende."""
+
+    def __init__(self, engine: ChismeIntelligenceEngine):
+        self.engine = engine
+        self.cases: Dict[str, GossipCase] = {}
+
+    def intake(self, report: GossipReport) -> GossipCase:
+        evaluation = self.engine.evaluate(report)
+        priority = self._priority_score(evaluation)
+        status = self._initial_status(evaluation.severity)
+        case = GossipCase(
+            case_id=f"CASE-{report.report_id}",
+            report=report,
+            evaluation=evaluation,
+            status=status,
+            priority=priority,
+            timeline=[f"Intake completado con estado={status.value} y prioridad={priority:.2f}"],
+        )
+        self.cases[case.case_id] = case
+        return case
+
+    def queue(self) -> List[GossipCase]:
+        return sorted(self.cases.values(), key=lambda case: case.priority, reverse=True)
+
+    def transition_case(self, case_id: str, new_status: CaseStatus, note: str = "") -> GossipCase:
+        case = self.cases[case_id]
+        case.status = new_status
+        step_note = note or "Cambio de estado manual"
+        case.timeline.append(f"Estado -> {new_status.value}: {step_note}")
+        return case
+
+    def apply_feedback(self, feedback: FeedbackRecord) -> None:
+        if feedback.case_id not in self.cases:
+            raise KeyError(f"Caso no encontrado: {feedback.case_id}")
+
+        case = self.cases[feedback.case_id]
+        learning_delta = 0.08 * _clamp(feedback.confidence, 0.0, 1.0)
+        signed_delta = learning_delta if feedback.confirmed_true else -learning_delta
+
+        for source_id in case.report.source_ids:
+            source = self.engine.sources.get(source_id)
+            if source is None:
+                continue
+            source.reliability = _clamp(source.reliability + signed_delta, 0.0, 1.0)
+
+        final_note = feedback.notes or "Feedback aplicado a perfiles de fuente"
+        case.timeline.append(
+            f"Feedback: confirmed_true={feedback.confirmed_true}, confidence={feedback.confidence:.2f}. {final_note}"
+        )
+
+    @staticmethod
+    def _priority_score(evaluation: EvaluationResult) -> float:
+        return _clamp((evaluation.risk_score * 0.7) + ((1.0 - evaluation.credibility_score) * 0.3), 0.0, 1.0)
+
+    @staticmethod
+    def _initial_status(severity: Severity) -> CaseStatus:
+        if severity in {Severity.HIGH, Severity.CRITICAL}:
+            return CaseStatus.ESCALATED
+        return CaseStatus.TRIAGE
+
+
 def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
@@ -186,3 +273,10 @@ def build_demo_engine() -> Tuple[ChismeIntelligenceEngine, GossipReport]:
         emotional_intensity=0.76,
     )
     return engine, report
+
+
+def build_demo_ops() -> Tuple[ChismeOpsOrchestrator, GossipCase]:
+    engine, report = build_demo_engine()
+    orchestrator = ChismeOpsOrchestrator(engine)
+    case = orchestrator.intake(report)
+    return orchestrator, case
