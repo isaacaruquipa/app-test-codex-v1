@@ -1,0 +1,9 @@
+credibility_thresholds:
+  low: 0.35
+  medium: 0.55
+  high: 0.75
+
+risk_thresholds:
+  medium: 0.45
+  high: 0.70
+  critical: 0.85
